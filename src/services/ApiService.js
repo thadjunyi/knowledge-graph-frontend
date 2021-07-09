@@ -2,7 +2,7 @@ import { handleAPIRequest } from './BaseService';
 
 export async function getGraph() {
   const { response, error } = await handleAPIRequest(
-    { url: '/node/getAll', method: 'GET' }
+    { url: '/search/getAll', method: 'GET' }
   );
   if (error) {
     console.log(`Error while executing API "getGraph": ` + error.message)
@@ -12,12 +12,27 @@ export async function getGraph() {
   return { data };
 }
 
-export async function search(searchText) {
+export async function findNeighbors(name) {
   const { response, error } = await handleAPIRequest(
-    { url: '/search', method: 'POST', data: { text: searchText } }
+    { url: '/search/findNeighbors', params:{ 'search':name }, method: 'GET' }
   );
   if (error) {
-    console.log(`Error while executing API "search": ` + error.message)
+    console.log(`Error while executing API "findNeighbors": ` + error.message)
+    return { error };
+  }
+  const data = response.data;
+  return { data };
+}
+
+export async function findGraphHistory(searchHistory, degree) {
+  console.log(searchHistory);
+  console.log(degree);
+
+  const { response, error } = await handleAPIRequest(
+    { url: '/search/findGraphHistory', params:{ 'search':searchHistory, 'degree':degree }, method: 'GET' }
+  );
+  if (error) {
+    console.log(`Error while executing API "findGraphHistory": ` + error.message)
     return { error };
   }
   const data = response.data;

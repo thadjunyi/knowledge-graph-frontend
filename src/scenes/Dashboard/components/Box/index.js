@@ -10,7 +10,7 @@ class Dashboard_Box extends React.Component {
         properties: "",
         defaultProperties: {
           "nodes": [],
-          "edges": []
+          // "edges": []
         },
         graph: {
           nodes: [],
@@ -22,7 +22,8 @@ class Dashboard_Box extends React.Component {
             hierarchical: false
           },
           edges: {
-            color: "#000000"
+            color: "#000000",
+            width: 0.5
           },
           interaction: {
             hover: true,
@@ -30,8 +31,8 @@ class Dashboard_Box extends React.Component {
           // height: "690px",
           height: "500px",
           nodes: {
-            shape: "circle",
-            size: 1,
+            shape: "dot",
+            size: 10,
             font: {
               color: "#000000",
               size: 13,
@@ -67,7 +68,7 @@ class Dashboard_Box extends React.Component {
   select = (nodes, edges) => {
     var properties = {
       "nodes": [],
-      "edges": []
+      // "edges": []
     }
     nodes.forEach(selectedNode => {
       this.state.graph.nodes.forEach(node => {
@@ -77,14 +78,14 @@ class Dashboard_Box extends React.Component {
         }
       });
     });
-    edges.forEach(selectedEdge => {
-      this.state.graph.edges.forEach(edge => {
-        if (edge.id === selectedEdge) {
-          properties.edges.push(edge);
-          return;
-        }
-      });
-    });
+    // edges.forEach(selectedEdge => {
+    //   this.state.graph.edges.forEach(edge => {
+    //     if (edge.id === selectedEdge) {
+    //       properties.edges.push(edge);
+    //       return;
+    //     }
+    //   });
+    // });
     this.setProperties(properties);
   }
 
@@ -113,6 +114,7 @@ class Dashboard_Box extends React.Component {
   }
 
   setProperties(propertiesJson) {
+    propertiesJson.nodes.forEach(node => delete node.color);
     var propertiesString = "";
     if (JSON.stringify(propertiesJson) !== JSON.stringify(this.state.defaultProperties)) {
       propertiesString = JSON.stringify(propertiesJson, undefined, 4);
