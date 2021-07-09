@@ -1,28 +1,24 @@
 import React from 'react';
 import Graph from "react-graph-vis";
-import { getGraph, findNeighbors, findGraphHistory } from '../../../../services/ApiService';
+import { getGraph, findNeighbors, findGraph } from '../../../../services/ApiService';
 
 class Search_Box extends React.Component {
 
     constructor(props) {
         super(props);
         this.state = {
+            monitor: false,
             properties: "",
             search: "",
             degree: 1,
-            searchHistory: [],
+            blacklist: "",
             discoveryIndex: -1,
             discoveryHistory: [],
             freeze: false,
             result: "",
             defaultProperties: {
-              "discovery": {
-                  "nodes": [],
-              },
-              "search": {
-                  "nodes": [],
-                  "edges": []
-              }
+                "nodes": [],
+                "edges": []
             },
             graphDiscovery: {
               nodes: [],
@@ -38,13 +34,13 @@ class Search_Box extends React.Component {
                 hierarchical: false
               },
               edges: {
-                color: "#000000"
+                color: "#000000",
+                width: 0.5
               },
               interaction: {
                 hover: true,
               },
-            //   height: "350px",
-              height: "435px",
+              height: "600px",
               width: "580px",
               nodes: {
                 shape: "dot",
@@ -74,9 +70,9 @@ class Search_Box extends React.Component {
         this.componentDidMount = this.componentDidMount.bind(this);
         this.handleSearchChange = this.handleSearchChange.bind(this);
         this.handleDegreeChange = this.handleDegreeChange.bind(this);
+        this.handleBlacklistChange = this.handleBlacklistChange.bind(this);
         this.onEnterPress = this.onEnterPress.bind(this);
         this.freezeClicked = this.freezeClicked.bind(this);
-        this.clearSession = this.clearSession.bind(this);
         this.getNeighbors = this.getNeighbors.bind(this);
     }
 
@@ -84,13 +80,14 @@ class Search_Box extends React.Component {
     // }
 
     componentDidMount() {
-        getGraph()
+        this.computeScreenSize();
+        getGraph(this.state.search)
         .then(({ data, error }) => {
             if (data) {
                 this.setGraphDiscovery(data);
             }
         });
-        // findGraphHistory(this.state.searchHistory)
+        // findGraph(this.state.search, this.state.degree)
         // .then(({ data, error }) => {
         //     if (data) {
         //         this.setGraphSearch(data);
@@ -101,10 +98,41 @@ class Search_Box extends React.Component {
     // componentDidUpdate() {
     //   console.log("componentDidUpdate")
     // }
+
+    computeScreenSize() {
+        this.setState({
+            options: {
+              layout: {
+                hierarchical: true
+              },
+              edges: {
+                color: "#000000",
+                width: 0.5
+              },
+              interaction: {
+                hover: true,
+              },
+              height: this.state.monitor ? "600px" : "600px",
+              width: this.state.monitor ? "740px" : "580px",
+              nodes: {
+                shape: "dot",
+                size: 10,
+                font: {
+                  color: "#000000",
+                  size: 13,
+                  bold: {
+                    mod: "bold"
+                  }
+                }
+              }
+            }
+        })
+    }
     
     selectDiscovery = (nodes, edges) => {
         var properties = {
-            "nodes": []
+            "nodes": [],
+            "edges": []
         }
         nodes.forEach(selectedNode => {
             this.state.graphDiscovery.nodes.forEach(node => {
@@ -114,15 +142,17 @@ class Search_Box extends React.Component {
                 }
             });
         });
-        this.setProperties(properties);
-        if (properties.nodes.length > 0) {
-            this.setDiscoveryHistory(properties.nodes[0].label)
-            findNeighbors(properties.nodes[0].label)
-            .then(({ data, error }) => {
-                if (data) {
-                    this.setGraphDiscovery(data);
+        edges.forEach(selectedEdge => {
+            this.state.graphDiscovery.edges.forEach(edge => {
+                if (edge.id === selectedEdge) {
+                    properties.edges.push(edge);
+                    return;
                 }
             });
+        });
+        this.setProperties(properties);
+        if (properties.nodes.length > 0) {
+            this.setDiscovery(properties.nodes[0].label, true)
         }
     }
 
@@ -158,9 +188,6 @@ class Search_Box extends React.Component {
     }
       
     setGraphDiscovery(data) {
-        if (this.state.freeze) {
-            return
-        }
         data.graph.nodes.forEach(node => {
             var type = node.type;
             var color = null;
@@ -181,13 +208,15 @@ class Search_Box extends React.Component {
         data.graph.nodes.forEach(node => {
             var type = node.type;
             var color = null;
-            if (this.state.color[type] == null) {
-                color = this.randomColor();
-                this.state.color[type] = color;
-            } else {
-                color = this.state.color[type];
+            if (node['color'] == null) {
+                if (this.state.color[type] == null) {
+                    color = this.randomColor();
+                    this.state.color[type] = color;
+                } else {
+                    color = this.state.color[type];
+                }
+                node['color'] = color;
             }
-            node['color'] = color;
         })
         this.setState({ 
             graphSearch: { nodes: data.graph.nodes, edges: data.graph.edges }
@@ -195,40 +224,104 @@ class Search_Box extends React.Component {
     }
 
     setProperties(propertiesJson) {
-        propertiesJson.nodes.forEach(node => delete node.color);
-        var propertiesString = "";
-        if ((JSON.stringify(propertiesJson) !== JSON.stringify(this.state.defaultProperties.discovery)) &&
-            (JSON.stringify(propertiesJson) !== JSON.stringify(this.state.defaultProperties.search))) {
-            propertiesString = JSON.stringify(propertiesJson, undefined, 4);
+
+        this.setItemClicked(true);
+        if (JSON.stringify(propertiesJson) === JSON.stringify(this.state.defaultProperties)) {
+          this.setItemClicked(false);
+          return;
         }
+    
+        var properties = {};
+        properties['group'] = {};
+        propertiesJson.nodes.forEach(node => {
+          Object.entries(node).map(([key, value]) => {
+            properties[key] = value
+          })
+        })
+        propertiesJson.edges.forEach(edge => {
+          var itemToAdd = [];
+          if (properties['id'] == null) {
+            properties['id'] = edge['id']
+            properties['label'] = edge['label']
+            itemToAdd.push(edge['fromLabel']);
+            itemToAdd.push(edge['toLabel']);
+            console.log(itemToAdd)
+          } else {
+    
+            if (edge['fromLabel'] != properties['label']) {
+              itemToAdd.push(edge['fromLabel']);
+            } else {
+              itemToAdd.push(edge['toLabel']);
+            }
+          }
+          if (edge['label'] in properties['group']) {
+            properties['group'][edge['label']] = properties['group'][edge['label']].concat(itemToAdd);
+          } else {
+            properties['group'][edge['label']] = [...itemToAdd];
+          }
+        })
         this.setState({ 
-            properties: propertiesString
+          properties: properties
         });
+      }
+
+    getDiscovery(search, referencePrevious) {
+        var search = search.split(",");
+        var discovery = search;
+        if (referencePrevious) {
+            if (this.state.discoveryIndex >= 0) {
+                discovery = [...this.state.discoveryHistory[this.state.discoveryIndex]];
+            } else {
+                discovery = [];
+            }
+            for (var i=0; i<search.length; i++) {
+                if (discovery.includes(search[i])) {
+                    for (var j=0; j<discovery.length; j++) {
+                        if (discovery[j] === search[i]) {
+                            discovery.splice(j, 1);
+                            break;
+                        }
+                    }
+                } else {
+                    discovery.push(search[i])
+                }
+            }
+        }
+        return discovery;
     }
 
-    setSearchHistory(search) {
-        var searchHistory = this.state.searchHistory;
-        var test = search.split(", ");
-        console.log(test)
-        searchHistory.push(search);
-        this.setState({ 
-            searchHistory: test
-        });
-    }
-
-    setDiscoveryHistory(search) {
+    setDiscovery(search, referencePrevious) {
         if (this.state.freeze) {
-            return
+            this.getNeighbors(false, 0);
+            return;
         }
+        var discovery = this.getDiscovery(search, referencePrevious);
         var discoveryHistory = this.state.discoveryHistory;
         var indexToAdd = this.state.discoveryIndex+1;
-        if (search != discoveryHistory[indexToAdd-1]) {
-            discoveryHistory.splice(indexToAdd, discoveryHistory.length-indexToAdd, search);
-            this.setState({ 
+
+        if (discovery.length != 0 && JSON.stringify(discovery) != JSON.stringify(discoveryHistory[indexToAdd-1])) {
+            discoveryHistory.splice(indexToAdd, discoveryHistory.length-indexToAdd, discovery);
+            this.setState({
                 discoveryHistory: discoveryHistory,
                 discoveryIndex: indexToAdd
+                }
+                , () => {
+                    console.log(discoveryHistory);
+                    findNeighbors(this.state.discoveryHistory[this.state.discoveryIndex])
+                    .then(({ data, error }) => {
+                        if (data) {
+                            this.setGraphDiscovery(data);
+                        }
+                    }
+                );
             });
         }
+    }
+
+    setItemClicked(itemClicked) {
+        this.setState({ 
+          itemClicked: itemClicked
+        });
     }
 
     resetGraphDiscovery() {
@@ -259,18 +352,17 @@ class Search_Box extends React.Component {
         })
     }
 
+    handleBlacklistChange(e) {
+        this.setState({
+            blacklist: e.target.value
+        })
+    }
+
     onEnterPress(e) {
         if(e.keyCode === 13 && e.shiftKey === false) {
             e.preventDefault();
-            // this.setDiscoveryHistory(this.state.search)
-            // findNeighbors(this.state.search)
-            // .then(({ data, error }) => {
-            //     if (data) {
-            //         this.setGraphDiscovery(data);
-            //     }
-            // });
-            this.setSearchHistory(this.state.search)
-            findGraphHistory(this.state.search, this.state.degree)
+            this.setDiscovery(this.state.search, false)
+            findGraph(this.state.search, this.state.degree, this.state.blacklist)
             .then(({ data, error }) => {
                 if (data) {
                     this.setGraphSearch(data);
@@ -285,20 +377,14 @@ class Search_Box extends React.Component {
         }))
     }
 
-    clearSession() {
-        this.setState({
-            searchHistory: []
-        })
-    }
-
     getNeighbors(reset, value) {
         var discoveryIndex = this.state.discoveryIndex + value;
         if (reset || discoveryIndex == -1) {
             if (reset) {
                 this.resetGraphDiscovery();
             }
-            this.setDiscoveryIndex(discoveryIndex)
-            getGraph()
+            this.setDiscoveryIndex(-1)
+            getGraph(this.state.search)
             .then(({ data, error }) => {
                 if (data) {
                     this.setGraphDiscovery(data);
@@ -317,7 +403,7 @@ class Search_Box extends React.Component {
 
     getStringifyValue(value) {
         if (Object.prototype.toString.call(value) == "[object String]") {
-            value = value.split(", ");
+            value = value.split(",");
         }
         return JSON.stringify(value, undefined, 0)
     }
@@ -326,111 +412,142 @@ class Search_Box extends React.Component {
         return (
           <React.Fragment>
             <div className="row">
-              <div className="px-md-1 col-md-2">
-                Properties:
-                <div>
-                    <textarea  
-                        className="e-input"
-                        style={{ 
-                            // height:690,
-                            height:500,
-                            // width:300,
-                            width:235
-                        }}
-                        type="text"
-                        placeholder="No item selected" 
-                        value={this.state.properties}
-                        readOnly={true}
-                    />
-                </div>
-              </div>
-              <div className="px-md-1 col-md-10">
-                <div className="row">
-                    <div className="px-md-2">
-                        Search (Delimit by comma followed by a space ', '):
+                <div className="px-md-1 col-md-2">
+                    {this.state.itemClicked == true ?
                         <div>
-                            <textarea  
-                                className="e-input"
-                                style={{ 
-                                    height:30,
-                                    // width:1500,
-                                    width:1000
-                                }}
-                                type="text"
-                                placeholder="Please enter search text" 
-                                value={this.state.search}
-                                onChange={this.handleSearchChange}
-                                onKeyDown={this.onEnterPress}
-                            />
+                            <div className="row">id: {this.state.properties['id']}</div>
+                            <div className="row">type: {this.state.properties['type']}</div>
+                            <div className="row">label: {this.state.properties['label']}</div>
+                            <br/>
+                            <div className="row">Properties:</div>
+                            {this.state.properties.properties != null &&
+                            <ul>
+                                {Object.entries(this.state.properties.properties).map(([key, value]) => 
+                                    <li key={key}>{key}: {value}</li>
+                                )}
+                            </ul>
+                            }
+                            <br/>
+                            <div className="row">Group:</div>
+                            {this.state.properties.group != null &&
+                                <ul>
+                                    {Object.entries(this.state.properties.group).map(([groupKey, groupValue]) =>
+                                        <div>
+                                            <li key={groupKey}>{groupKey}: </li>
+                                            <ul>
+                                                {Object.entries(this.state.properties.group[groupKey]).map(([key, value]) => 
+                                                    <li key={key}>{value}</li>
+                                                )}
+                                            </ul>
+                                        </div>
+                                    )}
+                                </ul>
+                            }
                         </div>
-                    </div>
-                    <div className="px-md-2">
-                        Number of degree:
+                        :
                         <div>
-                            <textarea  
-                                className="e-input"
-                                style={{ 
-                                    height:30,
-                                    // width:1500,
-                                    width:200
-                                }}
-                                type="text"
-                                placeholder="Please enter degree" 
-                                value={this.state.degree}
-                                onChange={this.handleDegreeChange}
-                                onKeyDown={this.onEnterPress}
-                            />
+                            No item selected
+                        </div>
+                    }
+                </div>
+                <div className="px-md-1 col-md-10">
+                    <div className="row px-md-2">
+                        <div className="px-md-2">
+                            Search (Delimit by comma ','):
+                            <div>
+                                <textarea  
+                                    className="e-input"
+                                    style={{ 
+                                        height: 30,
+                                        width: this.state.monitor ? 1300 : 1000,
+                                    }}
+                                    type="text"
+                                    placeholder="Please enter search text" 
+                                    value={this.state.search}
+                                    onChange={this.handleSearchChange}
+                                    onKeyDown={this.onEnterPress}
+                                />
+                            </div>
+                        </div>
+                        <div className="px-md-2">
+                            Number of degree:
+                            <div>
+                                <textarea  
+                                    className="e-input"
+                                    style={{
+                                        height: 30,
+                                        width: this.state.monitor ? 200 : 185,
+                                    }}
+                                    type="text"
+                                    placeholder="Please enter degree" 
+                                    value={this.state.degree}
+                                    onChange={this.handleDegreeChange}
+                                    onKeyDown={this.onEnterPress}
+                                />
+                            </div>
+                        </div>
+                        <div className="px-md-2">
+                            Blacklist (Delimit by comma ','):
+                            <div>
+                                <textarea  
+                                    className="e-input"
+                                    style={{ 
+                                        height: this.state.monitor ? 30 : 30,
+                                        width: this.state.monitor ? 1518 : 1200,
+                                    }}
+                                    type="text"
+                                    placeholder="Please enter blacklist text" 
+                                    value={this.state.blacklist}
+                                    onChange={this.handleBlacklistChange}
+                                    onKeyDown={this.onEnterPress}
+                                />
+                            </div>
+                        </div>
+                    </div>
+                    <div className="row">
+                        <div className="px-md-3 col-md-6">
+                            Data Discovery
+                            <div style={{border: '2px solid rgb(0, 0, 0)'}}>
+                                <Graph
+                                    graph={this.state.graphDiscovery}
+                                    options={this.state.options}
+                                    events={this.state.eventsDiscovery}
+                                    getNetwork={network => {
+                                        //  if you want access to vis.js network api you can set the state in a parent component using this property
+                                    }}
+                                />
+                            </div>
+                            <button onClick={this.freezeClicked}>
+                                {this.state.freeze ? "Graph Freezed" : "Graph Unfreezed"}
+                            </button>
+                            <button onClick={(e) => this.getNeighbors(true, 0)}>
+                                Reset
+                            </button>
+                            <button onClick={(e) => this.getNeighbors(false, -1)}>
+                                Previous
+                            </button>
+                            <button onClick={(e) => this.getNeighbors(false, 1)}>
+                                Next
+                            </button>
+                            {/* <br/>
+                            {this.getStringifyValue(this.state.discoveryHistory)} */}
+                        </div>
+                        <div className="px-md-3 col-md-6">
+                            Search Result
+                            <div style={{border: '2px solid rgb(0, 0, 0)'}}>
+                                <Graph
+                                    graph={this.state.graphSearch}
+                                    options={this.state.options}
+                                    events={this.state.eventsSearch}
+                                    getNetwork={network => {
+                                        //  if you want access to vis.js network api you can set the state in a parent component using this property
+                                    }}
+                                />
+                            </div>
+                            {/* {this.getStringifyValue(this.state.search)} */}
                         </div>
                     </div>
                 </div>
-                <div className="row">
-                    <div className="px-md-3 col-md-6">
-                        Data Discovery
-                        <div style={{border: '2px solid rgb(0, 0, 0)'}}>
-                            <Graph
-                                graph={this.state.graphDiscovery}
-                                options={this.state.options}
-                                events={this.state.eventsDiscovery}
-                                getNetwork={network => {
-                                    //  if you want access to vis.js network api you can set the state in a parent component using this property
-                                }}
-                            />
-                        </div>
-                        <button onClick={this.freezeClicked}>
-                            {this.state.freeze ? "Graph Freezed" : "Graph Unfreezed"}
-                        </button>
-                        <button onClick={(e) => this.getNeighbors(true, 0)}>
-                            Reset
-                        </button>
-                        <button onClick={(e) => this.getNeighbors(false, -1)}>
-                            Previous
-                        </button>
-                        <button onClick={(e) => this.getNeighbors(false, 1)}>
-                            Next
-                        </button>
-                        <br/>
-                        {this.getStringifyValue(this.state.discoveryHistory)}
-                    </div>
-                    <div className="px-md-3 col-md-6">
-                        Search Result
-                        <div style={{border: '2px solid rgb(0, 0, 0)'}}>
-                            <Graph
-                                graph={this.state.graphSearch}
-                                options={this.state.options}
-                                events={this.state.eventsSearch}
-                                getNetwork={network => {
-                                    //  if you want access to vis.js network api you can set the state in a parent component using this property
-                                }}
-                            />
-                        </div>
-                        {/* <button onClick={this.clearSession}>
-                            Clear Session
-                        </button>
-                        <br/> */}
-                        {this.getStringifyValue(this.state.search)}
-                    </div>
-                </div>
-              </div>
             </div>
           </React.Fragment>
         );
