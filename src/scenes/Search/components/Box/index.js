@@ -1,6 +1,6 @@
 import React from 'react';
 import Graph from "react-graph-vis";
-import { getGraph, findNeighbors, findGraph } from '../../../../services/ApiService';
+import { getGraph, findNeighbors, findSearchGraph, findPageRankGraph } from '../../../../services/ApiService';
 import '../../../../App.css';
 
 class Search_Box extends React.Component {
@@ -13,6 +13,7 @@ class Search_Box extends React.Component {
             search: "",
             degree: 1,
             filter: "",
+            showSearch: true,
             discoveryIndex: -1,
             discoveryHistory: [],
             freeze: false,
@@ -24,7 +25,15 @@ class Search_Box extends React.Component {
               nodes: [],
               edges: []
             },
+            graph: {
+              nodes: [],
+              edges: []
+            },
             graphSearch: {
+              nodes: [],
+              edges: []
+            },
+            graphPageRank: {
               nodes: [],
               edges: []
             },
@@ -56,7 +65,8 @@ class Search_Box extends React.Component {
         this.handleFilterChange = this.handleFilterChange.bind(this);
         this.onEnterSearchPress = this.onEnterSearchPress.bind(this);
         this.onEnterFilterPress = this.onEnterFilterPress.bind(this);
-        this.freezeClicked = this.freezeClicked.bind(this);
+        this.toggleFreeze = this.toggleFreeze.bind(this);
+        this.toggleView = this.toggleView.bind(this);
         this.getNeighbors = this.getNeighbors.bind(this);
     }
 
@@ -176,7 +186,7 @@ class Search_Box extends React.Component {
             "edges": []
         }
         nodes.forEach(selectedNode => {
-            this.state.graphSearch.nodes.forEach(node => {
+            this.state.graph.nodes.forEach(node => {
                 if (node.id === selectedNode) {
                     properties.nodes.push(node);
                     return;
@@ -184,7 +194,7 @@ class Search_Box extends React.Component {
             });
         });
         edges.forEach(selectedEdge => {
-            this.state.graphSearch.edges.forEach(edge => {
+            this.state.graph.edges.forEach(edge => {
                 if (edge.id === selectedEdge) {
                     properties.edges.push(edge);
                     return;
@@ -214,6 +224,12 @@ class Search_Box extends React.Component {
         });
     }
 
+    setGraph(graphData) {
+        this.setState({ 
+            graph: { nodes: graphData.nodes, edges: graphData.edges }
+        });
+    }
+
     setGraphSearch(data) {
         data.graph.nodes.forEach(node => {
             var type = node.type;
@@ -224,6 +240,24 @@ class Search_Box extends React.Component {
         this.setState({ 
             graphSearch: { nodes: data.graph.nodes, edges: data.graph.edges }
         });
+        if (this.state.showSearch) {
+            this.setGraph(data.graph)
+        }
+    }
+
+    setGraphPageRank(data) {
+        data.graph.nodes.forEach(node => {
+            var type = node.type;
+            if (node['color'] == null) {
+                node['color'] = this.getColor(type);
+            }
+        })
+        this.setState({ 
+            graphPageRank: { nodes: data.graph.nodes, edges: data.graph.edges }
+        });
+        if (!this.state.showSearch) {
+            this.setGraph(data.graph)
+        }
     }
 
     getColor(type) {
@@ -334,9 +368,9 @@ class Search_Box extends React.Component {
                             if (data) {
                                 this.setGraphDiscovery(data);
                             }
-                        }
-                    );
-                });
+                        });
+                    }
+                );
             } else {
                 findNeighbors(this.state.discoveryHistory[this.state.discoveryIndex], this.state.filter)
                 .then(({ data, error }) => {
@@ -386,10 +420,16 @@ class Search_Box extends React.Component {
         if(e.keyCode === 13 && e.shiftKey === false) {
             e.preventDefault();
             this.setDiscovery(this.state.search, false)
-            findGraph(this.state.search, this.state.degree, this.state.filter)
+            findSearchGraph(this.state.search, this.state.degree, this.state.filter)
             .then(({ data, error }) => {
                 if (data) {
                     this.setGraphSearch(data);
+                }
+            });
+            findPageRankGraph(this.state.search, this.state.filter)
+            .then(({ data, error }) => {
+                if (data) {
+                    this.setGraphPageRank(data);
                 }
             });
         }
@@ -399,19 +439,38 @@ class Search_Box extends React.Component {
         if(e.keyCode === 13 && e.shiftKey === false) {
             e.preventDefault();
             this.setDiscovery("", true)
-            findGraph(this.state.search, this.state.degree, this.state.filter)
+            findSearchGraph(this.state.search, this.state.degree, this.state.filter)
             .then(({ data, error }) => {
                 if (data) {
                     this.setGraphSearch(data);
                 }
             });
+            findPageRankGraph(this.state.search, this.state.filter)
+            .then(({ data, error }) => {
+                if (data) {
+                    this.setGraphPageRank(data);
+                }
+            });
         }
     }
 
-    freezeClicked() {
+    toggleFreeze() {
         this.setState(prevState => ({
             freeze: !prevState.freeze
         }))
+    }
+
+    toggleView() {
+        console.log('clicked toggle')
+        this.setState(prevState => ({
+            showSearch: !prevState.showSearch
+        }), () => {
+            if (this.state.showSearch) {
+                this.setGraph(this.state.graphSearch);
+            } else {
+                this.setGraph(this.state.graphPageRank);
+            }
+        });
     }
 
     getNeighbors(reset, value) {
@@ -563,7 +622,7 @@ class Search_Box extends React.Component {
                                     }}
                                 />
                             </div>
-                            <button onClick={this.freezeClicked}>
+                            <button onClick={this.toggleFreeze}>
                                 {this.state.freeze ? "Graph Freezed" : "Graph Unfreezed"}
                             </button>
                             <button onClick={(e) => this.getNeighbors(true, 0)}>
@@ -582,7 +641,7 @@ class Search_Box extends React.Component {
                             Search Result:
                             <div style={{border: '2px solid rgb(0, 0, 0)'}}>
                                 <Graph
-                                    graph={this.state.graphSearch}
+                                    graph={this.state.graph}
                                     options={this.state.options}
                                     events={this.state.eventsSearch}
                                     getNetwork={network => {
@@ -590,6 +649,9 @@ class Search_Box extends React.Component {
                                     }}
                                 />
                             </div>
+                            <button onClick={this.toggleView}>
+                                {this.state.showSearch ? "Search View" : "Page Rank View"}
+                            </button>
                             {/* {this.getStringifyValue(this.state.search)} */}
                         </div>
                     </div>

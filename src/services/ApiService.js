@@ -25,12 +25,24 @@ export async function findNeighbors(search, filter) {
   return { data };
 }
 
-export async function findGraph(search, degree, filter) {
+export async function findSearchGraph(search, degree, filter) {
   const { response, error } = await handleAPIRequest(
-    { url: '/search/findGraph', params:{ 'search':search, 'degree':degree, 'filter':filter }, method: 'GET' }
+    { url: '/search/findSearchGraph', params:{ 'search':search, 'degree':degree, 'filter':filter }, method: 'GET' }
   );
   if (error) {
-    console.log(`Error while executing API "findGraph": ` + error.message)
+    console.log(`Error while executing API "findSearchGraph": ` + error.message)
+    return { error };
+  }
+  const data = response.data;
+  return { data };
+}
+
+export async function findPageRankGraph(search, filter) {
+  const { response, error } = await handleAPIRequest(
+    { url: '/search/findPageRankGraph', params:{ 'search':search, 'filter':filter }, method: 'GET' }
+  );
+  if (error) {
+    console.log(`Error while executing API "findPageRankGraph": ` + error.message)
     return { error };
   }
   const data = response.data;
