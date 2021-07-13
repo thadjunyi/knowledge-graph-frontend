@@ -60,9 +60,6 @@ class Search_Box extends React.Component {
         this.getNeighbors = this.getNeighbors.bind(this);
     }
 
-    // componentDidMount() {
-    // }
-
     componentDidMount() {
         this.computeScreenSize();
         getGraph()
@@ -71,17 +68,7 @@ class Search_Box extends React.Component {
                 this.setGraphDiscovery(data);
             }
         });
-        // findGraph(this.state.search, this.state.degree)
-        // .then(({ data, error }) => {
-        //     if (data) {
-        //         this.setGraphSearch(data);
-        //     }
-        // });
     }
-    
-    // componentDidUpdate() {
-    //   console.log("componentDidUpdate")
-    // }
 
     //for usage, refer to https://github.com/visjs/vis-network/blob/master/docs/network/index.html
     computeScreenSize() {
@@ -281,7 +268,6 @@ class Search_Box extends React.Component {
             properties['label'] = edge['label']
             itemToAdd.push(edge['fromLabel']);
             itemToAdd.push(edge['toLabel']);
-            console.log(itemToAdd)
           } else {
     
             if (edge['fromLabel'] != properties['label']) {

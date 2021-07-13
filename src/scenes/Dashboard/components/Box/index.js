@@ -48,15 +48,10 @@ class Dashboard_Box extends React.Component {
     getGraph()
     .then(({ data, error }) => {
       if (data) {
-        console.log(data)
         this.setGraph(data);
       }
     });
   }
-
-  // componentDidUpdate() {
-  //   console.log("componentDidUpdate")
-  // }
 
   //for usage, refer to https://github.com/visjs/vis-network/blob/master/docs/network/index.html
   computeScreenSize() {
@@ -219,7 +214,6 @@ class Dashboard_Box extends React.Component {
         properties['label'] = edge['label']
         itemToAdd.push(edge['fromLabel']);
         itemToAdd.push(edge['toLabel']);
-        console.log(itemToAdd)
       } else {
 
         if (edge['fromLabel'] != properties['label']) {
