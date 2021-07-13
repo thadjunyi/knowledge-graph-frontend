@@ -1,21 +1,21 @@
 import React from 'react';
 import Graph from "react-graph-vis";
 import { getGraph, findNeighbors, findGraph } from '../../../../services/ApiService';
+import '../../../../App.css';
 
 class Search_Box extends React.Component {
 
     constructor(props) {
         super(props);
         this.state = {
-            monitor: false,
+            monitor: true,
             properties: "",
             search: "",
             degree: 1,
-            blacklist: "",
+            filter: "",
             discoveryIndex: -1,
             discoveryHistory: [],
             freeze: false,
-            result: "",
             defaultProperties: {
                 "nodes": [],
                 "edges": []
@@ -30,34 +30,17 @@ class Search_Box extends React.Component {
             },
             color: {},
             options: {
-              layout: {
-                hierarchical: false
-              },
-              edges: {
-                color: "#000000",
-                width: 0.5
-              },
-              interaction: {
-                hover: true,
-              },
               height: "600px",
               width: "580px",
-              nodes: {
-                shape: "dot",
-                size: 10,
-                font: {
-                  color: "#000000",
-                  size: 13,
-                  bold: {
-                    mod: "bold"
-                  }
-                }
-              }
             },
             eventsDiscovery: {
               select: (event) => {
                 var { nodes, edges } = event;
                 this.selectDiscovery(nodes, edges);
+              },
+              doubleClick: (event) => {
+                var { nodes, edges } = event;
+                this.doubleClick(nodes, edges);
               },
             },
             eventsSearch: {
@@ -70,8 +53,9 @@ class Search_Box extends React.Component {
         this.componentDidMount = this.componentDidMount.bind(this);
         this.handleSearchChange = this.handleSearchChange.bind(this);
         this.handleDegreeChange = this.handleDegreeChange.bind(this);
-        this.handleBlacklistChange = this.handleBlacklistChange.bind(this);
-        this.onEnterPress = this.onEnterPress.bind(this);
+        this.handleFilterChange = this.handleFilterChange.bind(this);
+        this.onEnterSearchPress = this.onEnterSearchPress.bind(this);
+        this.onEnterFilterPress = this.onEnterFilterPress.bind(this);
         this.freezeClicked = this.freezeClicked.bind(this);
         this.getNeighbors = this.getNeighbors.bind(this);
     }
@@ -81,7 +65,7 @@ class Search_Box extends React.Component {
 
     componentDidMount() {
         this.computeScreenSize();
-        getGraph(this.state.search)
+        getGraph()
         .then(({ data, error }) => {
             if (data) {
                 this.setGraphDiscovery(data);
@@ -99,11 +83,14 @@ class Search_Box extends React.Component {
     //   console.log("componentDidUpdate")
     // }
 
+    //for usage, refer to https://github.com/visjs/vis-network/blob/master/docs/network/index.html
     computeScreenSize() {
         this.setState({
             options: {
               layout: {
-                hierarchical: true
+                hierarchical: {
+                    enabled: false,
+                }
               },
               edges: {
                 color: "#000000",
@@ -123,6 +110,23 @@ class Search_Box extends React.Component {
                   bold: {
                     mod: "bold"
                   }
+                },
+              },
+              physics: {
+                forceAtlas2Based: {
+                    gravitationalConstant: -26,
+                    centralGravity: 0.005,
+                    springLength: 230,
+                    springConstant: 0,
+                    avoidOverlap: 1.5
+                },
+                maxVelocity: 146,
+                solver: 'forceAtlas2Based',
+                timestep: 0.35,
+                stabilization: {
+                    enabled: true,
+                    iterations: 200,
+                    updateInterval: 25
                 }
               }
             }
@@ -151,9 +155,32 @@ class Search_Box extends React.Component {
             });
         });
         this.setProperties(properties);
-        if (properties.nodes.length > 0) {
-            this.setDiscovery(properties.nodes[0].label, true)
-        }
+    }
+
+    doubleClick = (nodes, edges) => {
+      var properties = {
+        "nodes": [],
+        "edges": []
+      }
+      nodes.forEach(selectedNode => {
+        this.state.graphDiscovery.nodes.forEach(node => {
+          if (node.id === selectedNode) {
+            properties.nodes.push(node);
+            return;
+          }
+        });
+      });
+      edges.forEach(selectedEdge => {
+        this.state.graphDiscovery.edges.forEach(edge => {
+          if (edge.id === selectedEdge) {
+            properties.edges.push(edge);
+            return;
+          }
+        });
+      });
+      if (properties.nodes.length > 0) {
+          this.setDiscovery(properties.nodes[0].label, true)
+      }
     }
 
     selectSearch = (nodes, edges) => {
@@ -181,23 +208,19 @@ class Search_Box extends React.Component {
     }
     
     randomColor() {
-        const red = Math.floor(128 + Math.random() * (256-128)).toString(16).padStart(2, '0');
-        const green = Math.floor(128 + Math.random() * (256-128)).toString(16).padStart(2, '0');
-        const blue = Math.floor(128 + Math.random() * (256-128)).toString(16).padStart(2, '0');
+        // Math.floor(128 + Math.random() * (256-128)).toString(16).padStart(2, '0');
+        const red = Math.floor(0 + Math.random() * (256)).toString(16).padStart(2, '0');
+        const green = Math.floor(0 + Math.random() * (256)).toString(16).padStart(2, '0');
+        const blue = Math.floor(0 + Math.random() * (256)).toString(16).padStart(2, '0');
         return `#${red}${green}${blue}`;
     }
       
     setGraphDiscovery(data) {
         data.graph.nodes.forEach(node => {
             var type = node.type;
-            var color = null;
-            if (this.state.color[type] == null) {
-                color = this.randomColor();
-                this.state.color[type] = color;
-            } else {
-                color = this.state.color[type];
+            if (node['color'] == null) {
+                node['color'] = this.getColor(type);
             }
-            node['color'] = color;
         })
         this.setState({ 
             graphDiscovery: { nodes: data.graph.nodes, edges: data.graph.edges }
@@ -207,19 +230,32 @@ class Search_Box extends React.Component {
     setGraphSearch(data) {
         data.graph.nodes.forEach(node => {
             var type = node.type;
-            var color = null;
             if (node['color'] == null) {
-                if (this.state.color[type] == null) {
-                    color = this.randomColor();
-                    this.state.color[type] = color;
-                } else {
-                    color = this.state.color[type];
-                }
-                node['color'] = color;
+                node['color'] = this.getColor(type);
             }
         })
         this.setState({ 
             graphSearch: { nodes: data.graph.nodes, edges: data.graph.edges }
+        });
+    }
+
+    getColor(type) {
+        var filtered = ['Resource', '_GraphConfig', '_NsPrefDef'];
+        var color = null;
+        if (!filtered.includes(type)) {
+            if (this.state.color[type] == null) {
+                color = this.randomColor();
+                this.state.color[type] = color;
+            } else {
+                color = this.state.color[type];
+            }
+        }
+        return color;
+    }
+
+    setItemClicked(itemClicked) {
+        this.setState({ 
+          itemClicked: itemClicked
         });
     }
 
@@ -299,29 +335,31 @@ class Search_Box extends React.Component {
         var discoveryHistory = this.state.discoveryHistory;
         var indexToAdd = this.state.discoveryIndex+1;
 
-        if (discovery.length != 0 && JSON.stringify(discovery) != JSON.stringify(discoveryHistory[indexToAdd-1])) {
-            discoveryHistory.splice(indexToAdd, discoveryHistory.length-indexToAdd, discovery);
-            this.setState({
-                discoveryHistory: discoveryHistory,
-                discoveryIndex: indexToAdd
-                }
-                , () => {
-                    console.log(discoveryHistory);
-                    findNeighbors(this.state.discoveryHistory[this.state.discoveryIndex])
-                    .then(({ data, error }) => {
-                        if (data) {
-                            this.setGraphDiscovery(data);
-                        }
+        if (discovery.length != 0) {
+            if (JSON.stringify(discovery) != JSON.stringify(discoveryHistory[indexToAdd-1])) {
+                discoveryHistory.splice(indexToAdd, discoveryHistory.length-indexToAdd, discovery);
+                this.setState({
+                    discoveryHistory: discoveryHistory,
+                    discoveryIndex: indexToAdd
                     }
-                );
-            });
+                    , () => {
+                        findNeighbors(this.state.discoveryHistory[this.state.discoveryIndex], this.state.filter)
+                        .then(({ data, error }) => {
+                            if (data) {
+                                this.setGraphDiscovery(data);
+                            }
+                        }
+                    );
+                });
+            } else {
+                findNeighbors(this.state.discoveryHistory[this.state.discoveryIndex], this.state.filter)
+                .then(({ data, error }) => {
+                    if (data) {
+                        this.setGraphDiscovery(data);
+                    }
+                });
+            }
         }
-    }
-
-    setItemClicked(itemClicked) {
-        this.setState({ 
-          itemClicked: itemClicked
-        });
     }
 
     resetGraphDiscovery() {
@@ -352,17 +390,30 @@ class Search_Box extends React.Component {
         })
     }
 
-    handleBlacklistChange(e) {
+    handleFilterChange(e) {
         this.setState({
-            blacklist: e.target.value
+            filter: e.target.value
         })
     }
 
-    onEnterPress(e) {
+    onEnterSearchPress(e) {
         if(e.keyCode === 13 && e.shiftKey === false) {
             e.preventDefault();
             this.setDiscovery(this.state.search, false)
-            findGraph(this.state.search, this.state.degree, this.state.blacklist)
+            findGraph(this.state.search, this.state.degree, this.state.filter)
+            .then(({ data, error }) => {
+                if (data) {
+                    this.setGraphSearch(data);
+                }
+            });
+        }
+    }
+
+    onEnterFilterPress(e) {
+        if(e.keyCode === 13 && e.shiftKey === false) {
+            e.preventDefault();
+            this.setDiscovery("", true)
+            findGraph(this.state.search, this.state.degree, this.state.filter)
             .then(({ data, error }) => {
                 if (data) {
                     this.setGraphSearch(data);
@@ -384,7 +435,7 @@ class Search_Box extends React.Component {
                 this.resetGraphDiscovery();
             }
             this.setDiscoveryIndex(-1)
-            getGraph(this.state.search)
+            getGraph(this.state.search, this.state.filter)
             .then(({ data, error }) => {
                 if (data) {
                     this.setGraphDiscovery(data);
@@ -392,7 +443,7 @@ class Search_Box extends React.Component {
             });
         } else if ((discoveryIndex >= 0) && (discoveryIndex < this.state.discoveryHistory.length)) {
             this.setDiscoveryIndex(discoveryIndex)
-            findNeighbors(this.state.discoveryHistory[discoveryIndex])
+            findNeighbors(this.state.discoveryHistory[discoveryIndex], this.state.filter)
             .then(({ data, error }) => {
                 if (data) {
                     this.setGraphDiscovery(data);
@@ -413,8 +464,17 @@ class Search_Box extends React.Component {
           <React.Fragment>
             <div className="row">
                 <div className="px-md-1 col-md-2">
+                    Legend:
+                    <div>
+                        <ul>
+                            {Object.entries(this.state.color).map(([key, value]) => 
+                                <div key={key}><div className='dot' style={{backgroundColor: value}}></div>{key}</div>
+                            )}
+                        </ul>
+                    </div>
+                    <br/>
                     {this.state.itemClicked == true ?
-                        <div>
+                        <div key={this.state.properties['id']}>
                             <div className="row">id: {this.state.properties['id']}</div>
                             <div className="row">type: {this.state.properties['type']}</div>
                             <div className="row">label: {this.state.properties['label']}</div>
@@ -465,7 +525,7 @@ class Search_Box extends React.Component {
                                     placeholder="Please enter search text" 
                                     value={this.state.search}
                                     onChange={this.handleSearchChange}
-                                    onKeyDown={this.onEnterPress}
+                                    onKeyDown={this.onEnterSearchPress}
                                 />
                             </div>
                         </div>
@@ -482,12 +542,12 @@ class Search_Box extends React.Component {
                                     placeholder="Please enter degree" 
                                     value={this.state.degree}
                                     onChange={this.handleDegreeChange}
-                                    onKeyDown={this.onEnterPress}
+                                    onKeyDown={this.onEnterSearchPress}
                                 />
                             </div>
                         </div>
                         <div className="px-md-2">
-                            Blacklist (Delimit by comma ','):
+                            Filter (Delimit by comma ','):
                             <div>
                                 <textarea  
                                     className="e-input"
@@ -496,17 +556,17 @@ class Search_Box extends React.Component {
                                         width: this.state.monitor ? 1518 : 1200,
                                     }}
                                     type="text"
-                                    placeholder="Please enter blacklist text" 
-                                    value={this.state.blacklist}
-                                    onChange={this.handleBlacklistChange}
-                                    onKeyDown={this.onEnterPress}
+                                    placeholder="Please enter filter text" 
+                                    value={this.state.filter}
+                                    onChange={this.handleFilterChange}
+                                    onKeyDown={this.onEnterFilterPress}
                                 />
                             </div>
                         </div>
                     </div>
                     <div className="row">
                         <div className="px-md-3 col-md-6">
-                            Data Discovery
+                            Data Discovery:
                             <div style={{border: '2px solid rgb(0, 0, 0)'}}>
                                 <Graph
                                     graph={this.state.graphDiscovery}
@@ -533,7 +593,7 @@ class Search_Box extends React.Component {
                             {this.getStringifyValue(this.state.discoveryHistory)} */}
                         </div>
                         <div className="px-md-3 col-md-6">
-                            Search Result
+                            Search Result:
                             <div style={{border: '2px solid rgb(0, 0, 0)'}}>
                                 <Graph
                                     graph={this.state.graphSearch}

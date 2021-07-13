@@ -1,8 +1,8 @@
 import { handleAPIRequest } from './BaseService';
 
-export async function getGraph(search) {
+export async function getGraph(search, filter) {
   const { response, error } = await handleAPIRequest(
-    { url: '/search/getAll', params:{ 'search':search }, method: 'GET' }
+    { url: '/search/getAll', params:{ 'search':search, 'filter':filter }, method: 'GET' }
   );
   if (error) {
     console.log(`Error while executing API "getGraph": ` + error.message)
@@ -12,10 +12,10 @@ export async function getGraph(search) {
   return { data };
 }
 
-export async function findNeighbors(search) {
+export async function findNeighbors(search, filter) {
   search = search.toString();
   const { response, error } = await handleAPIRequest(
-    { url: '/search/findNeighbors', params:{ 'search':search }, method: 'GET' }
+    { url: '/search/findNeighbors', params:{ 'search':search, 'filter':filter }, method: 'GET' }
   );
   if (error) {
     console.log(`Error while executing API "findNeighbors": ` + error.message)
@@ -25,9 +25,9 @@ export async function findNeighbors(search) {
   return { data };
 }
 
-export async function findGraph(search, degree, blacklist) {
+export async function findGraph(search, degree, filter) {
   const { response, error } = await handleAPIRequest(
-    { url: '/search/findGraph', params:{ 'search':search, 'degree':degree, 'blacklist':blacklist }, method: 'GET' }
+    { url: '/search/findGraph', params:{ 'search':search, 'degree':degree, 'filter':filter }, method: 'GET' }
   );
   if (error) {
     console.log(`Error while executing API "findGraph": ` + error.message)
