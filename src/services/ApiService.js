@@ -36,36 +36,3 @@ export async function findGraph(search, degree, filter) {
   const data = response.data;
   return { data };
 }
-
-// export async function createCategory({ category, rules }) {
-//   const { data, error } = await handleApiRequest({ url: `/category/${category}/rules`, method: 'POST', data: { rules }});
-//   if (error) {
-//     if (data && !data.ok) {
-//       return { error: { failedRules: data.failed }};
-//     }
-//     return { error };
-//   }
-//   return {};
-// }
-
-// export async function addCategoryRules({ category, rules }) {
-//   const { data, error } = await handleApiRequest({ url: `/category/${category}/rules`, method: 'POST', data: { rules }});
-//   if (error) {
-//     if (data && !data.ok) {
-//       return { error: { failedRules: data.failed }};
-//     }
-//     return { error };
-//   }
-//   return {};
-// }
-
-// export async function deleteCategoryRules({ category, rules }) {
-//   const { data, error } = await handleApiRequest({ url: `/category/${category}/rules`, method: 'DELETE', data: { rules }});
-//   if (error) {
-//     if (data && data.failed && data.failed.length) {
-//       return { error: { failedRules: data.failed }};
-//     }
-//     return { error };
-//   }
-//   return {};
-// }
