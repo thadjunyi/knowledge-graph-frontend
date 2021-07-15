@@ -8,7 +8,7 @@ class Dashboard_Box extends React.Component {
   constructor(props) {
     super(props);
     this.state = {
-        monitor: true,
+        monitor: false,
         properties: "",
         itemClicked: false,
         discoveryIndex: -1,
@@ -25,7 +25,7 @@ class Dashboard_Box extends React.Component {
         color: {},
         options: {
           height: "515px",
-          width: "1220px",
+          width: "1200px",
         },
         events: {
           select: (event) => {
@@ -70,7 +70,7 @@ class Dashboard_Box extends React.Component {
           hover: true,
         },
         height: this.state.monitor ? "730px" : "515px",
-        width: this.state.monitor ? "1535px" : "1220px",
+        width: this.state.monitor ? "1535px" : "1200px",
         nodes: {
           shape: "dot",
           size: 10,

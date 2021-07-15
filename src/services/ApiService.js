@@ -12,10 +12,10 @@ export async function getGraph(search, filter) {
   return { data };
 }
 
-export async function findNeighbors(search, filter) {
+export async function findNeighbors(search) {
   search = search.toString();
   const { response, error } = await handleAPIRequest(
-    { url: '/search/findNeighbors', params:{ 'search':search, 'filter':filter }, method: 'GET' }
+    { url: '/search/findNeighbors', params:{ 'search':search }, method: 'GET' }
   );
   if (error) {
     console.log(`Error while executing API "findNeighbors": ` + error.message)
@@ -37,7 +37,7 @@ export async function findSearchGraph(search, degree, filter) {
   return { data };
 }
 
-export async function findPageRankGraph(search, filter) {
+export async function findRecommendGraph(search, filter) {
   const { response, error } = await handleAPIRequest(
     { url: '/search/findPageRankGraph', params:{ 'search':search, 'filter':filter }, method: 'GET' }
   );
