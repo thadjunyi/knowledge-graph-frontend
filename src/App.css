@@ -21,3 +21,7 @@
 .vis-network {
     overflow:visible;
 }
+
+.ow-anywhere {
+    overflow-wrap: anywhere;
+ }

@@ -1,6 +1,6 @@
 import React from 'react';
 import Graph from "react-graph-vis";
-import { getGraph, findNeighbors } from '../../../../services/ApiService';
+import { getAll, findNeighbors } from '../../../../services/ApiService';
 import '../../../../App.css';
 
 class Dashboard_Box extends React.Component {
@@ -8,17 +8,18 @@ class Dashboard_Box extends React.Component {
   constructor(props) {
     super(props);
     this.state = {
-        monitor: false,
+        monitor: true,
         properties: "",
         itemClicked: false,
-        discoveryIndex: -1,
-        discoveryHistory: [],
-        freeze: false,
+        search: "",
+        index: -1,
+        history: [],
         defaultProperties: {
           "nodes": [],
           "edges": []
         },
         graph: {
+          loading: false,
           nodes: [],
           edges: []
         },
@@ -39,13 +40,13 @@ class Dashboard_Box extends React.Component {
         }
     };
     this.componentDidMount = this.componentDidMount.bind(this);
-    this.freezeClicked = this.freezeClicked.bind(this);
-    this.getNeighbors = this.getNeighbors.bind(this);
+    this.getHistory = this.getHistory.bind(this);
   }
 
   componentDidMount() {
     this.computeScreenSize();
-    getGraph()
+    this.setGraphLoading(true);
+    getAll()
     .then(({ data, error }) => {
       if (data) {
         this.setGraph(data);
@@ -99,7 +100,7 @@ class Dashboard_Box extends React.Component {
               iterations: 200,
               updateInterval: 25
           }
-      }
+        }
       }
     })
   }
@@ -150,7 +151,7 @@ class Dashboard_Box extends React.Component {
       });
     });
     if (properties.nodes.length > 0) {
-        this.setDiscovery(properties.nodes[0].label, true)
+        this.addSearchHistory(properties.nodes[0].label, true);
     }
   }
 
@@ -160,16 +161,6 @@ class Dashboard_Box extends React.Component {
     const green = Math.floor(0 + Math.random() * (256)).toString(16).padStart(2, '0');
     const blue = Math.floor(0 + Math.random() * (256)).toString(16).padStart(2, '0');
     return `#${red}${green}${blue}`;
-  }
-  
-  setGraph(data) {
-    data.graph.nodes.forEach(node => {
-      var type = node.type;
-      node['color'] = this.getColor(type);
-    })
-    this.setState({ 
-      graph: { nodes: data.graph.nodes, edges: data.graph.edges }
-    });
   }
 
   getColor(type) {
@@ -184,7 +175,123 @@ class Dashboard_Box extends React.Component {
         }
     }
     return color;
-}
+  }
+
+  getSearchString(searchList) {
+    var searchString = "";
+    for (var i=0; i<searchList.length; i++) {
+      searchString += searchList[i]
+      if (i != searchList.length-1) {
+        searchString += '|'
+      }
+    }
+    return searchString;
+  }
+
+  getHistory(reset, value) {
+      var index = this.state.index + value;
+
+      if (reset || index == -1) {
+          if (reset) {
+              this.resetHistory();
+          }
+          this.setHistoryIndex(-1, "");
+          this.setGraphLoading(true);
+          getAll()
+          .then(({ data, error }) => {
+              if (data) {
+                  this.setGraph(data);
+              }
+          });
+      } else if ((index >= 0) && (index < this.state.history.length)) {
+        var searchString = this.getSearchString(this.state.history[index]);
+        this.setHistoryIndex(index, searchString);
+        this.setGraphLoading(true);
+        findNeighbors(searchString)
+        .then(({ data, error }) => {
+            if (data) {
+                this.setGraph(data);
+            }
+        });
+      }
+  }
+
+  getSearchList(newSearchText, referencePrevious) {
+      var newSearchList = newSearchText.split("|");
+      var searchList = newSearchList;
+      
+      if (referencePrevious && this.state.index >= 0) {
+          searchList = [...this.state.history[this.state.index]];
+          for (var i=0; i<newSearchList.length; i++) {
+              if (searchList.includes(newSearchList[i])) {
+                  for (var j=0; j<searchList.length; j++) {
+                      if (searchList[j] === newSearchList[i]) {
+                          searchList.splice(j, 1);
+                          break;
+                      }
+                  }
+              } else {
+                  searchList.push(newSearchList[i]);
+              }
+          }
+      }
+      return searchList;
+  }
+
+  addSearchHistory(newSearchText, referencePrevious) {
+    if (newSearchText == "" || newSearchText == null) {
+        return;
+    }
+
+    var searchList = this.getSearchList(newSearchText, referencePrevious);
+    var searchString = this.getSearchString(searchList);
+    var history = this.state.history;
+    var indexToAdd = this.state.index+1;
+
+    if (searchList.length > 0) {
+      if (JSON.stringify(searchList) != JSON.stringify(history[indexToAdd-1])) {
+        history.splice(indexToAdd, history.length-indexToAdd, searchList);
+        this.setHistory(history);
+        this.setHistoryIndex(indexToAdd, searchString);
+      }
+      this.setGraphLoading(true);
+      findNeighbors(searchString)
+      .then(({ data, error }) => {
+        if (data) {
+          this.setGraph(data);
+        }
+      });
+    }
+  }
+
+  setHistoryIndex(index, search) {
+    this.setState({ 
+      index: index,
+      search: search
+    });
+  }
+
+  setHistory(history) {
+    this.setState({ 
+      history: history
+    });
+  }
+  
+  setGraphLoading(value) {
+    this.setState(prevState => ({ 
+      graph: { ...prevState.graph, loading: value }
+    }));
+  }
+
+  setGraph(data) {
+    data.graph.nodes.forEach(node => {
+      var type = node.type;
+      node['color'] = this.getColor(type);
+    })
+    this.setState({ 
+      graph: { loading: false, nodes: data.graph.nodes, edges: data.graph.edges }
+    });
+  }
 
   setItemClicked(itemClicked) {
       this.setState({ 
@@ -214,14 +321,15 @@ class Dashboard_Box extends React.Component {
         properties['label'] = edge['label']
         itemToAdd.push(edge['fromLabel']);
         itemToAdd.push(edge['toLabel']);
-      } else {
 
+      } else {
         if (edge['fromLabel'] != properties['label']) {
           itemToAdd.push(edge['fromLabel']);
         } else {
           itemToAdd.push(edge['toLabel']);
         }
       }
+
       if (edge['label'] in properties['group']) {
         properties['group'][edge['label']] = properties['group'][edge['label']].concat(itemToAdd);
       } else {
@@ -233,108 +341,18 @@ class Dashboard_Box extends React.Component {
     });
   }
 
-  getDiscovery(search, referencePrevious) {
-      var search = search.split(",");
-      var discovery = search;
-      if (referencePrevious) {
-          if (this.state.discoveryIndex >= 0) {
-              discovery = [...this.state.discoveryHistory[this.state.discoveryIndex]];
-          } else {
-              discovery = [];
-          }
-          for (var i=0; i<search.length; i++) {
-              if (discovery.includes(search[i])) {
-                  for (var j=0; j<discovery.length; j++) {
-                      if (discovery[j] === search[i]) {
-                          discovery.splice(j, 1);
-                          break;
-                      }
-                  }
-              } else {
-                  discovery.push(search[i])
-              }
-          }
-      }
-      return discovery;
-  }
-
-  setDiscovery(search, referencePrevious) {
-    if (this.state.freeze) {
-      this.getNeighbors(false, 0);
-      return;
-    }
-    var discovery = this.getDiscovery(search, referencePrevious);
-    var discoveryHistory = this.state.discoveryHistory;
-    var indexToAdd = this.state.discoveryIndex+1;
-
-    if (discovery.length != 0 && JSON.stringify(discovery) != JSON.stringify(discoveryHistory[indexToAdd-1])) {
-      discoveryHistory.splice(indexToAdd, discoveryHistory.length-indexToAdd, discovery);
-      this.setState({
-        discoveryHistory: discoveryHistory,
-        discoveryIndex: indexToAdd
-      }
-      , () => {
-        findNeighbors(this.state.discoveryHistory[this.state.discoveryIndex])
-        .then(({ data, error }) => {
-          if (data) {
-            this.setGraph(data);
-          }
-        });
-      });
-    }
-  }
-
-  resetGraph() {
-      if (this.state.freeze) {
-          return
-      }
-      this.setState({ 
-          discoveryHistory: [],
-          discoveryIndex: -1
-      });
-  }
-
-  setDiscoveryIndex(discoveryIndex) {
-      this.setState({ 
-          discoveryIndex: discoveryIndex
-      });
-  }
-  
-  freezeClicked() {
-    this.setState(prevState => ({
-        freeze: !prevState.freeze
-    }))
-  }
-
-  getNeighbors(reset, value) {
-      var discoveryIndex = this.state.discoveryIndex + value;
-      if (reset || discoveryIndex == -1) {
-          if (reset) {
-              this.resetGraph();
-          }
-          this.setDiscoveryIndex(-1)
-          getGraph()
-          .then(({ data, error }) => {
-              if (data) {
-                  this.setGraph(data);
-              }
-          });
-      } else if ((discoveryIndex >= 0) && (discoveryIndex < this.state.discoveryHistory.length)) {
-          this.setDiscoveryIndex(discoveryIndex)
-          findNeighbors(this.state.discoveryHistory[discoveryIndex])
-          .then(({ data, error }) => {
-              if (data) {
-                  this.setGraph(data);
-              }
-          });
-      }
-  }
-
   getStringifyValue(value) {
       if (Object.prototype.toString.call(value) == "[object String]") {
-          value = value.split(",");
+          value = value.split("|");
       }
       return JSON.stringify(value, undefined, 0)
+  }
+
+  resetHistory() {
+    this.setState({
+        history: [],
+        index: -1
+    });
   }
 
   render() {
@@ -346,13 +364,13 @@ class Dashboard_Box extends React.Component {
             <div>
               <ul>
                 {Object.entries(this.state.color).map(([key, value]) => 
-                  <div><div className='dot' style={{backgroundColor: value}}></div>{key}</div>
+                  <div key={key}><div className='dot' style={{backgroundColor: value}}></div>{key}</div>
                 )}
               </ul>
             </div>
             <br/>
             {this.state.itemClicked == true ?
-              <div>
+              <div key={this.state.properties['id']} className="ow-anywhere">
                 <div className="row">id: {this.state.properties['id']}</div>
                 <div className="row">type: {this.state.properties['type']}</div>
                 <div className="row">label: {this.state.properties['label']}</div>
@@ -389,6 +407,14 @@ class Dashboard_Box extends React.Component {
             }
           </div>
           <div className="px-md-1 col-md-10">
+            {this.state.graph.loading == true &&
+              <div id="spinner" style={{ top: "50%" }}>
+                <i
+                  className="fa fa-spinner fa-pulse fa-3x fa-fw"
+                  style={{ fontSize: 36, color: "#ef6c00" }}
+                />
+              </div>
+            }
             Graph Overview:
             <div style={{border: '2px solid rgb(0, 0, 0)'}}>
               <Graph
@@ -400,20 +426,23 @@ class Dashboard_Box extends React.Component {
                 }}
               />
             </div>
-              <button onClick={this.freezeClicked}>
-                {this.state.freeze ? "Graph Freezed" : "Graph Unfreezed"}
-              </button>
-              <button onClick={(e) => this.getNeighbors(true, 0)}>
+              <button onClick={(e) => this.getHistory(true, 0)}>
                 Reset
               </button>
-              <button onClick={(e) => this.getNeighbors(false, -1)}>
+              <button onClick={(e) => this.getHistory(false, -1)}>
                 Previous
               </button>
-              <button onClick={(e) => this.getNeighbors(false, 1)}>
+              <button onClick={(e) => this.getHistory(false, 1)}>
                 Next
               </button>
               {/* <br/>
-              {this.getStringifyValue(this.state.discoveryHistory)} */}
+              Search Query:
+              <br/>
+              {this.state.index} {this.state.search}
+              <br/>
+              Search History:
+              <br/>
+              {this.getStringifyValue(this.state.history)} */}
           </div>
         </div>
       </React.Fragment>

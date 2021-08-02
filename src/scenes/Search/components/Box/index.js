@@ -1,6 +1,6 @@
 import React from 'react';
 import Graph from "react-graph-vis";
-import { getGraph, findNeighbors, findSearchGraph, findRecommendGraph } from '../../../../services/ApiService';
+import { getAllRecommended, findSearchGraph, findRecommendGraph, findLinkageGraph, findFocusGraph } from '../../../../services/ApiService';
 import '../../../../App.css';
 
 class Search_Box extends React.Component {
@@ -8,50 +8,96 @@ class Search_Box extends React.Component {
     constructor(props) {
         super(props);
         this.state = {
-            monitor: false,
+            monitor: true,
             properties: "",
+            itemClicked: false,
             search: "",
+            discoverySearch: "",
             degree: 1,
-            filter: "",
+            typeFilter: "Article",
+            nodesNum: 5,
             index: -1,
             history: [],
             defaultProperties: {
                 "nodes": [],
                 "edges": []
             },
-            graphSearchNodes: [],
-            graphRecommendNodes: [],
-            graphEdges: [],
+            graph: {
+              loading: false,
+              nodes: [],
+              edges: []
+            },
+            graphRecommend: {
+                loading: false,
+                nodes: [],
+                edges: []
+            },
+            graphLinkage: {
+                loading: false,
+                nodes: [],
+                edges: []
+            },
+            graphFocus: {
+                loading: false,
+                nodes: [],
+                edges: []
+            },
             color: {},
             options: {
               height: "600px",
               width: "580px",
             },
-            events: {
-              select: (event) => {
+            graphEvents: {
+                select: (event) => {
                 var { nodes, edges } = event;
-                this.select(nodes, edges);
+                this.selectGraph(nodes, edges);
               },
               doubleClick: (event) => {
                 var { nodes, edges } = event;
-                this.doubleClick(nodes, edges);
+                this.doubleClickGraph(nodes, edges);
+              },
+            },
+            graphRecommendEvents: {
+                select: (event) => {
+                var { nodes, edges } = event;
+                this.selectGraphRecommend(nodes, edges);
+              },
+              doubleClick: (event) => {
+                var { nodes, edges } = event;
+                this.doubleClickGraphRecommend(nodes, edges);
+              },
+            },
+            graphLinkageEvents: {
+                select: (event) => {
+                var { nodes, edges } = event;
+                this.selectGraphLinkage(nodes, edges);
+              }
+            },
+            graphFocusEvents: {
+              select: (event) => {
+                var { nodes, edges } = event;
+                this.selectGraphFocus(nodes, edges);
               },
             },
         };
         this.componentDidMount = this.componentDidMount.bind(this);
         this.handleSearchChange = this.handleSearchChange.bind(this);
         this.handleDegreeChange = this.handleDegreeChange.bind(this);
-        this.handleFilterChange = this.handleFilterChange.bind(this);
+        this.handleDiscoverySearchChange = this.handleDiscoverySearchChange.bind(this);
+        this.handleTypeFilterChange = this.handleTypeFilterChange.bind(this);
+        this.handleNodesNumChange = this.handleNodesNumChange.bind(this);
         this.onEnterPress = this.onEnterPress.bind(this);
+        this.onEnterDiscoveryPress = this.onEnterDiscoveryPress.bind(this);
         this.getHistory = this.getHistory.bind(this);
     }
 
     componentDidMount() {
         this.computeScreenSize();
-        getGraph()
+        this.setGraphLoading(true);
+        getAllRecommended()
         .then(({ data, error }) => {
             if (data) {
-                this.setGraphSearch(data);
+                this.setGraph(data);
             }
         });
     }
@@ -106,13 +152,29 @@ class Search_Box extends React.Component {
         })
     }
     
-    select = (nodes, edges) => {
+    selectGraph = (nodes, edges) => {
+        this.select(this.state.graph, nodes, edges);
+    }
+    
+    selectGraphRecommend = (nodes, edges) => {
+        this.select(this.state.graphRecommend, nodes, edges);
+    }
+    
+    selectGraphLinkage = (nodes, edges) => {
+        this.select(this.state.graphLinkage, nodes, edges);
+    }
+    
+    selectGraphFocus = (nodes, edges) => {
+        this.select(this.state.graphFocus, nodes, edges);
+    }
+
+    select = (graph, nodes, edges) => {
         var properties = {
             "nodes": [],
             "edges": []
         }
         nodes.forEach(selectedNode => {
-            this.state.graphSearchNodes.forEach(node => {
+            graph.nodes.forEach(node => {
                 if (node.id === selectedNode) {
                     properties.nodes.push(node);
                     return;
@@ -120,7 +182,7 @@ class Search_Box extends React.Component {
             });
         });
         edges.forEach(selectedEdge => {
-            this.state.graphEdges.forEach(edge => {
+            graph.edges.forEach(edge => {
                 if (edge.id === selectedEdge) {
                     properties.edges.push(edge);
                     return;
@@ -129,14 +191,22 @@ class Search_Box extends React.Component {
         });
         this.setProperties(properties);
     }
+    
+    doubleClickGraph = (nodes, edges) => {
+        this.doubleClick(this.state.graph, nodes, edges);
+    }
+    
+    doubleClickGraphRecommend = (nodes, edges) => {
+        this.doubleClick(this.state.graphRecommend, nodes, edges);
+    }
 
-    doubleClick = (nodes, edges) => {
+    doubleClick = (graph, nodes, edges) => {
       var properties = {
         "nodes": [],
         "edges": []
       }
       nodes.forEach(selectedNode => {
-        this.state.graphSearchNodes.forEach(node => {
+        graph.nodes.forEach(node => {
           if (node.id === selectedNode) {
             properties.nodes.push(node);
             return;
@@ -144,7 +214,7 @@ class Search_Box extends React.Component {
         });
       });
       edges.forEach(selectedEdge => {
-        this.state.graphEdges.forEach(edge => {
+        graph.edges.forEach(edge => {
           if (edge.id === selectedEdge) {
             properties.edges.push(edge);
             return;
@@ -164,53 +234,6 @@ class Search_Box extends React.Component {
         return `#${red}${green}${blue}`;
     }
 
-    async setGraphSearch(data) {
-        data.graph.nodes.forEach(node => {
-            var type = node.type;
-            if (node['color'] == null) {
-                node['color'] = this.getColor(type);
-            }
-        })
-        this.setState({ 
-            graphSearchNodes: data.graph.nodes, 
-            graphEdges: data.graph.edges,
-        });
-    }
-
-    async setGraphRecommend(data) {
-        data.graph.nodes.forEach(node => {
-            var type = node.type;
-            if (node['color'] == null) {
-                node['color'] = this.getColor(type);
-            }
-        })
-        
-        var found;
-        var recommendNode;
-        this.state.graphSearchNodes.forEach(searchNode => {
-            found = false;
-            for (var i=0; i<data.graph.nodes.length; i++) {
-                recommendNode = data.graph.nodes[i];
-                if (searchNode.id == recommendNode.id) {
-                    found = true;
-                    break;
-                }
-            }
-            if (!found) {
-                data.graph.nodes.push(searchNode);
-            }
-        })
-        if (this.state.graphEdges.length > 0) {
-            this.setState({ 
-                graphRecommendNodes: data.graph.nodes
-            });
-        } else {
-            this.setState({ 
-                graphRecommendNodes: []
-            });
-        }
-    }
-
     getColor(type) {
         var filtered = ['Resource', '_GraphConfig', '_NsPrefDef'];
         var color = null;
@@ -223,6 +246,215 @@ class Search_Box extends React.Component {
             }
         }
         return color;
+    }
+
+    getSearchString(searchList) {
+      var searchString = "";
+      for (var i=0; i<searchList.length; i++) {
+        searchString += searchList[i]
+        if (i != searchList.length-1) {
+          searchString += '|'
+        }
+      }
+      return searchString;
+    }
+
+    getHistory(reset, value) {
+        var index = this.state.index + value;
+
+        if (reset || index == -1) {
+            if (reset) {
+                this.resetHistory();
+            }
+            this.setHistoryIndex(-1, "");
+            this.setGraphLoading(true);
+            getAllRecommended()
+            .then(({ data, error }) => {
+                if (data) {
+                    this.setGraph(data);
+                }
+            });
+            this.resetGraph();
+            
+        } else if ((index >= 0) && (index < this.state.history.length)) {
+            var searchString = this.getSearchString(this.state.history[index]);
+            this.setHistoryIndex(index, searchString);
+            this.setGraphLoading(true);
+            findSearchGraph(searchString, this.state.degree)
+            .then(({ data, error }) => {
+                if (data) {
+                    this.setGraph(data)
+                }
+            });
+            this.setGraphRecommendLoading(true);
+            findRecommendGraph(searchString, this.state.degree)
+            .then(({ data, error }) => {
+                if (data) {
+                    this.setGraphRecommend(data);
+                }
+            })
+        }
+    }
+
+    getSearchList(newSearchText, referencePrevious) {
+        var newSearchList = newSearchText.split("|");
+        var searchList = newSearchList;
+        
+        if (referencePrevious && this.state.index >= 0) {
+            searchList = [...this.state.history[this.state.index]];
+            for (var i=0; i<newSearchList.length; i++) {
+                if (searchList.includes(newSearchList[i])) {
+                    for (var j=0; j<searchList.length; j++) {
+                        if (searchList[j] === newSearchList[i]) {
+                            searchList.splice(j, 1);
+                            break;
+                        }
+                    }
+                } else {
+                    searchList.push(newSearchList[i]);
+                }
+            }
+        }
+        return searchList;
+    }
+
+    addSearchHistory(newSearchText, referencePrevious) {
+        if (newSearchText == "" || newSearchText == null) {
+            return;
+        }
+        
+        var searchList = this.getSearchList(newSearchText, referencePrevious);
+        var searchString = this.getSearchString(searchList);
+        var history = this.state.history;
+        var indexToAdd = this.state.index+1;
+
+        if (searchList.length > 0) {
+            if (JSON.stringify(searchList) != JSON.stringify(history[indexToAdd-1])) {
+                history.splice(indexToAdd, history.length-indexToAdd, searchList);
+                this.setHistory(history);
+                this.setHistoryIndex(indexToAdd, searchString);
+            }
+            this.setGraphLoading(true);
+            findSearchGraph(searchString, this.state.degree)
+            .then(({ data, error }) => {
+                if (data) {
+                    this.setGraph(data);
+                }
+            });
+            this.setGraphRecommendLoading(true);
+            findRecommendGraph(searchString, this.state.degree)
+            .then(({ data, error }) => {
+                if (data) {
+                    this.setGraphRecommend(data);
+                }
+            })
+        }
+    }
+
+    discoverySearch() {
+        var discoverySearchList = this.state.discoverySearch.split("|");
+        var discoverySearchString = this.getSearchString(discoverySearchList);
+
+        if (discoverySearchList.length > 0) {
+            this.setGraphLinkageLoading(true);
+            findLinkageGraph(discoverySearchString)
+            .then(({ data, error }) => {
+                if (data) {
+                    console.log(data);
+                    this.setGraphLinkage(data);
+                }
+            })
+            this.setGraphFocusLoading(true);
+            findFocusGraph(discoverySearchString, this.state.typeFilter, this.state.nodesNum)
+            .then(({ data, error }) => {
+                if (data) {
+                    console.log(data);
+                    this.setGraphFocus(data);
+                }
+            })
+        }
+    }
+
+    setHistoryIndex(index, search) {
+      this.setState({ 
+        index: index,
+        search: search,
+        discoverySearch: search
+      });
+    }
+  
+    setHistory(history) {
+      this.setState({ 
+        history: history
+      });
+    }
+  
+    setGraphLoading(value) {
+      this.setState(prevState => ({ 
+        graph: { ...prevState.graph, loading: value }
+      }));
+    }
+  
+    setGraphRecommendLoading(value) {
+      this.setState(prevState => ({ 
+        graphRecommend: { ...prevState.graphRecommend, loading: value }
+      }));
+    }
+  
+    setGraphLinkageLoading(value) {
+      this.setState(prevState => ({ 
+        graphLinkage: { ...prevState.graphLinkage, loading: value }
+      }));
+    }
+  
+    setGraphFocusLoading(value) {
+      this.setState(prevState => ({ 
+        graphFocus: { ...prevState.graphFocus, loading: value }
+      }));
+    }
+  
+    setGraph(data) {
+        data.graph.nodes.forEach(node => {
+            var type = node.type;
+            node['color'] = this.getColor(type);
+        })
+        this.setState({ 
+            graph: { loading: false, nodes: data.graph.nodes, edges: data.graph.edges }
+        });
+    }
+
+    setGraphRecommend(data) {
+        data.graph.nodes.forEach(node => {
+            var type = node.type;
+            if (node['color'] == null) {
+                node['color'] = this.getColor(type);
+            }
+        })
+        this.setState({ 
+            graphRecommend: { loading: false, nodes: data.graph.nodes, edges: data.graph.edges }
+        });
+    }
+
+    setGraphLinkage(data) {
+        data.graph.nodes.forEach(node => {
+            var type = node.type;
+            node['color'] = this.getColor(type);
+        })
+        this.setState({ 
+            graphLinkage: { loading: false, nodes: data.graph.nodes, edges: data.graph.edges }
+        });
+    }
+
+    setGraphFocus(data) {
+        data.graph.nodes.forEach(node => {
+            var type = node.type;
+            if (node['color'] == null) {
+                node['color'] = this.getColor(type);
+            }
+        })
+        this.setState({ 
+            graphFocus: { loading: false, nodes: data.graph.nodes, edges: data.graph.edges }
+        });
     }
 
     setItemClicked(itemClicked) {
@@ -242,25 +474,26 @@ class Search_Box extends React.Component {
         var properties = {};
         properties['group'] = {};
         propertiesJson.nodes.forEach(node => {
-          Object.entries(node).map(([key, value]) => {
-            properties[key] = value
-          })
+            Object.entries(node).map(([key, value]) => {
+                properties[key] = value
+            })
         })
         propertiesJson.edges.forEach(edge => {
-          var itemToAdd = [];
-          if (properties['id'] == null) {
-            properties['id'] = edge['id']
-            properties['label'] = edge['label']
-            itemToAdd.push(edge['fromLabel']);
-            itemToAdd.push(edge['toLabel']);
-          } else {
-    
-            if (edge['fromLabel'] != properties['label']) {
-              itemToAdd.push(edge['fromLabel']);
+            var itemToAdd = [];
+            if (properties['id'] == null) {
+                properties['id'] = edge['id']
+                properties['label'] = edge['label']
+                itemToAdd.push(edge['fromLabel']);
+                itemToAdd.push(edge['toLabel']);
+
             } else {
-              itemToAdd.push(edge['toLabel']);
-            }
+                if (edge['fromLabel'] != properties['label']) {
+                    itemToAdd.push(edge['fromLabel']);
+                } else {
+                    itemToAdd.push(edge['toLabel']);
+                }
           }
+          
           if (edge['label'] in properties['group']) {
             properties['group'][edge['label']] = properties['group'][edge['label']].concat(itemToAdd);
           } else {
@@ -268,92 +501,48 @@ class Search_Box extends React.Component {
           }
         })
         this.setState({ 
-          properties: properties
+            properties: properties
         });
-      }
-
-    getSearchList(newSearchText, referencePrevious) {
-        var newSearchList = newSearchText.split(",");
-        var searchList = newSearchList;
-        
-        if (referencePrevious && this.state.index >= 0) {
-            searchList = [...this.state.history[this.state.index]];
-            for (var i=0; i<newSearchList.length; i++) {
-                if (searchList.includes(newSearchList[i])) {
-                    for (var j=0; j<searchList.length; j++) {
-                        if (searchList[j] === newSearchList[i]) {
-                            searchList.splice(j, 1);
-                            break;
-                        }
-                    }
-                } else {
-                    searchList.push(newSearchList[i])
-                }
-            }
-        }
-        return searchList;
     }
 
-    addSearchHistory(newSearchText, referencePrevious) {
-        if (newSearchText == "" || newSearchText == null) {
-            return;
+    getStringifyValue(value) {
+        if (Object.prototype.toString.call(value) == "[object String]") {
+            value = value.split("|");
         }
-        
-        var searchList = this.getSearchList(newSearchText, referencePrevious);
-        var searchString = searchList.toString();
-        var history = this.state.history;
-        var indexToAdd = this.state.index+1;
-
-        if (searchList.length > 0) {
-            if (JSON.stringify(searchList) != JSON.stringify(history[indexToAdd-1])) {
-                history.splice(indexToAdd, history.length-indexToAdd, searchList);
-                this.setState({
-                    search: searchString,
-                    history: history,
-                    index: indexToAdd
-                });
-            }
-            findSearchGraph(searchString, this.state.degree, this.state.filter)
-            .then(({ data, error }) => {
-                if (data) {
-                    this.setGraphSearch(data)
-                    .then(() => {
-                        findRecommendGraph(searchString, this.state.filter)
-                        .then(({ data, error }) => {
-                            if (data) {
-                                this.setGraphRecommend(data);
-                            }
-                        })
-                    })
-                }
-            });
-        }
+        return JSON.stringify(value, undefined, 0)
     }
 
     resetHistory() {
-        this.setState({ 
+        this.setState({
             history: [],
             index: -1
         });
     }
 
     resetGraph() {
-        this.setState({ 
-            search: "",
-            graphSearchNodes: [],
-            graphRecommendNodes: []
-        });
-    }
-
-    setIndex(index) {
-        this.setState({ 
-            index: index
-        });
+        this.setState({
+            graphRecommend: {
+                loading: false,
+                nodes: [],
+                edges: []
+            },
+            graphLinkage: {
+                loading: false,
+                nodes: [],
+                edges: []
+            },
+            graphFocus: {
+                loading: false,
+                nodes: [],
+                edges: []
+            }
+        })
     }
 
     handleSearchChange(e) {
         this.setState({
-            search: e.target.value
+            search: e.target.value,
+            discoverySearch: e.target.value
         })
     }
 
@@ -363,9 +552,21 @@ class Search_Box extends React.Component {
         })
     }
 
-    handleFilterChange(e) {
+    handleDiscoverySearchChange(e) {
         this.setState({
-            filter: e.target.value
+            discoverySearch: e.target.value
+        })
+    }
+
+    handleTypeFilterChange(e) {
+        this.setState({
+            typeFilter: e.target.value
+        })
+    }
+
+    handleNodesNumChange(e) {
+        this.setState({
+            nodesNum: e.target.value
         })
     }
 
@@ -376,48 +577,11 @@ class Search_Box extends React.Component {
         }
     }
 
-    getHistory(reset, value) {
-        var index = this.state.index + value;
-        if (reset) {
-            this.resetHistory();
-            this.resetGraph();
-        } else if(index == -1) {
-            this.setIndex(index);
-            this.resetGraph();
-            getGraph(this.state.search, this.state.filter)
-            .then(({ data, error }) => {
-                if (data) {
-                    this.setGraphSearch(data);
-                }
-            });
-        } else if ((index >= 0) && (index < this.state.history.length)) {
-            var searchString = (this.state.history[index]).toString();
-            this.setState({
-                search: searchString,
-                index: index
-            });
-            findSearchGraph(searchString, this.state.degree, this.state.filter)
-            .then(({ data, error }) => {
-                if (data) {
-                    this.setGraphSearch(data)
-                    .then(() => {
-                        findRecommendGraph(searchString, this.state.filter)
-                        .then(({ data, error }) => {
-                            if (data) {
-                                this.setGraphRecommend(data);
-                            }
-                        })
-                    })
-                }
-            });
+    onEnterDiscoveryPress(e) {
+        if(e.keyCode === 13 && e.shiftKey === false) {
+            e.preventDefault();
+            this.discoverySearch();
         }
-    }
-
-    getStringifyValue(value) {
-        if (Object.prototype.toString.call(value) == "[object String]") {
-            value = value.split(",");
-        }
-        return JSON.stringify(value, undefined, 0)
     }
 
     render() {
@@ -436,7 +600,7 @@ class Search_Box extends React.Component {
                     </div>
                     <br/>
                     {this.state.itemClicked == true ?
-                        <div key={this.state.properties['id']}>
+                        <div key={this.state.properties['id']} className="ow-anywhere">
                             <div className="row">id: {this.state.properties['id']}</div>
                             <div className="row">type: {this.state.properties['type']}</div>
                             <div className="row">label: {this.state.properties['label']}</div>
@@ -475,7 +639,7 @@ class Search_Box extends React.Component {
                 <div className="px-md-1 col-md-10">
                     <div className="row px-md-2">
                         <div className="px-md-2">
-                            Search (Delimit by comma ','):
+                            Discovery Search (Delimit by pipe '|'):
                             <div>
                                 <textarea  
                                     className="e-input"
@@ -508,32 +672,27 @@ class Search_Box extends React.Component {
                                 />
                             </div>
                         </div>
-                        <div className="px-md-2">
-                            Filter (Delimit by comma ','):
-                            <div>
-                                <textarea  
-                                    className="e-input"
-                                    style={{ 
-                                        height: this.state.monitor ? 30 : 30,
-                                        width: this.state.monitor ? 1518 : 1200,
-                                    }}
-                                    type="text"
-                                    placeholder="Please enter filter text" 
-                                    value={this.state.filter}
-                                    onChange={this.handleFilterChange}
-                                    onKeyDown={this.onEnterPress}
-                                />
-                            </div>
-                        </div>
                     </div>
                     <div className="row">
                         <div className="px-md-3 col-md-6">
-                            Data Discovery:
+                            {/* Search History:
+                            <br/>
+                            {this.getStringifyValue(this.state.history)}
+                            <br/> */}
+                            {this.state.graph.loading == true &&
+                                <div id="spinner" style={{ top: "50%" }}>
+                                    <i
+                                    className="fa fa-spinner fa-pulse fa-3x fa-fw"
+                                    style={{ fontSize: 36, color: "#ef6c00" }}
+                                    />
+                                </div>
+                            }
+                            Graph Overview:
                             <div style={{border: '2px solid rgb(0, 0, 0)'}}>
                                 <Graph
-                                    graph={{ nodes: this.state.graphSearchNodes, edges: this.state.graphEdges }}
+                                    graph={this.state.graph}
                                     options={this.state.options}
-                                    events={this.state.events}
+                                    events={this.state.graphEvents}
                                     getNetwork={network => {
                                         //  if you want access to vis.js network api you can set the state in a parent component using this property
                                     }}
@@ -548,27 +707,131 @@ class Search_Box extends React.Component {
                             <button onClick={(e) => this.getHistory(false, 1)}>
                                 Next
                             </button>
-                            <br/>
-                            Search History:
-                            <br/>
-                            {this.getStringifyValue(this.state.history)}
                         </div>
                         <div className="px-md-3 col-md-6">
+                            {/* Search Query:
+                            <br/>
+                            {this.state.index} {this.state.search}
+                            <br/> */}
+                            {this.state.graphRecommend.loading == true &&
+                                <div id="spinner" style={{ top: "50%" }}>
+                                    <i
+                                    className="fa fa-spinner fa-pulse fa-3x fa-fw"
+                                    style={{ fontSize: 36, color: "#ef6c00" }}
+                                    />
+                                </div>
+                            }
                             Recommendation:
                             <div style={{border: '2px solid rgb(0, 0, 0)'}}>
                                 <Graph
-                                    graph={{ nodes: this.state.graphRecommendNodes, edges: this.state.graphEdges }}
+                                    graph={this.state.graphRecommend}
                                     options={this.state.options}
-                                    events={this.state.events}
+                                    events={this.state.graphRecommendEvents}
                                     getNetwork={network => {
                                         //  if you want access to vis.js network api you can set the state in a parent component using this property
                                     }}
                                 />
                             </div>
-                            <br/>
-                            Search Query:
-                            <br/>
-                            {this.getStringifyValue(this.state.search)}
+                        </div>
+                    </div>
+                    <br/>
+                    <div className="row px-md-2">
+                        <div className="px-md-2">
+                            Discovery Search (Delimit by pipe '|'):
+                            <div>
+                                <textarea  
+                                    className="e-input"
+                                    style={{ 
+                                        height: this.state.monitor ? 30 : 30,
+                                        width: this.state.monitor ? 1518 : 1200,
+                                    }}
+                                    type="text"
+                                    placeholder="Please enter discovery search text" 
+                                    value={this.state.discoverySearch}
+                                    onChange={this.handleDiscoverySearchChange}
+                                    onKeyDown={this.onEnterDiscoveryPress}
+                                />
+                            </div>
+                        </div>
+                        <div className="row px-md-3">
+                            <div className="px-md-2">
+                                Filter by Type (Delimit by pipe '|'):
+                                <div>
+                                    <textarea  
+                                        className="e-input"
+                                        style={{ 
+                                            height: this.state.monitor ? 30 : 30,
+                                            width: this.state.monitor ? 1300 : 1000,
+                                        }}
+                                        type="text"
+                                        placeholder="Please enter type filter" 
+                                        value={this.state.typeFilter}
+                                        onChange={this.handleTypeFilterChange}
+                                        onKeyDown={this.onEnterDiscoveryPress}
+                                    />
+                                </div>
+                            </div>
+                            <div className="px-md-2">
+                                Number of node:
+                                <div>
+                                    <textarea  
+                                        className="e-input"
+                                        style={{ 
+                                            height: this.state.monitor ? 30 : 30,
+                                            width: this.state.monitor ? 200 : 185,
+                                        }}
+                                        type="text"
+                                        placeholder="Please enter number of nodes to display" 
+                                        value={this.state.nodesNum}
+                                        onChange={this.handleNodesNumChange}
+                                        onKeyDown={this.onEnterDiscoveryPress}
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div className="row">
+                        <div className="px-md-3 col-md-6">
+                            {this.state.graphLinkage.loading == true &&
+                                <div id="spinner" style={{ top: "50%" }}>
+                                    <i
+                                    className="fa fa-spinner fa-pulse fa-3x fa-fw"
+                                    style={{ fontSize: 36, color: "#ef6c00" }}
+                                    />
+                                </div>
+                            }
+                            Selected Nodes Linkage Overview:
+                            <div style={{border: '2px solid rgb(0, 0, 0)'}}>
+                                <Graph
+                                    graph={this.state.graphLinkage}
+                                    options={this.state.options}
+                                    events={this.state.graphLinkageEvents}
+                                    getNetwork={network => {
+                                        //  if you want access to vis.js network api you can set the state in a parent component using this property
+                                    }}
+                                />
+                            </div>
+                        </div>
+                        <div className="px-md-3 col-md-6">
+                            {this.state.graphFocus.loading == true &&
+                                <div id="spinner" style={{ top: "50%" }}>
+                                    <i
+                                    className="fa fa-spinner fa-pulse fa-3x fa-fw"
+                                    style={{ fontSize: 36, color: "#ef6c00" }}
+                                    />
+                                </div>
+                            }
+                            Selected Nodes Focused View:
+                            <div style={{border: '2px solid rgb(0, 0, 0)'}}>
+                                <Graph
+                                    graph={this.state.graphFocus}
+                                    options={this.state.options}
+                                    events={this.state.graphFocusEvents}
+                                    getNetwork={network => {
+                                        //  if you want access to vis.js network api you can set the state in a parent component using this property
+                                    }}
+                                />
+                            </div>
                         </div>
                     </div>
                 </div>
